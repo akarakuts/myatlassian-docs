@@ -336,3 +336,12 @@ curl https://crowd.suite.example.com/.well-known/openid-configuration
 3. **Регулярно обновляйте** — обновляйте зависимости
 4. **Мониторьте** — настройте алерты на аномалии
 5. **Бэкапьте** — проверяйте восстановление регулярно
+
+## Дополнительные ресурсы
+
+- [Disaster Recovery Plan](runbooks/disaster-recovery-plan.md) — полный план восстановления после катастроф
+- [Backup Strategy](runbooks/backup-strategy.md) — стратегия резервного копирования
+- [High Availability](runbooks/high-availability.md) — архитектура высокой доступности
+- [Incident Response](runbooks/incident-response.md) — реагирование на инциденты
+- [API Reference](api-reference.md) — справочник по API (1,598 server functions)
+- [Performance Guide](performance-guide.md) — руководство по производительности
