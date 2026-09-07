@@ -1,0 +1,143 @@
+# my* Suite — Prometheus Alerting Rules
+# Конфигурация алертов для мониторинга всех 27 сервисов
+
+groups:
+  - name: my-suite-critical
+    rules:
+      # Сервис не отвечает
+      - alert: ServiceDown
+        expr: up{job="my-suite"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.instance }} is down"
+          description: "Service {{ $labels.instance }} has been down for more than 1 minute"
+
+      # Высокое время ответа
+      - alert: HighResponseTime
+        expr: http_request_duration_seconds{job="my-suite"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on {{ $labels.instance }}"
+          description: "Response time is {{ $value }}s on {{ $labels.instance }}"
+
+      # Высокая ошибка rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate on {{ $labels.instance }}"
+          description: "Error rate is {{ $value }}% on {{ $labels.instance }}"
+
+  - name: my-suite-database
+    rules:
+      # Много подключений к БД
+      - alert: HighDatabaseConnections
+        expr: pg_stat_activity_count > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections"
+          description: "There are {{ $value }} active database connections"
+
+      # Медленные запросы
+      - alert: SlowQueries
+        expr: pg_stat_activity_max_tx_duration{datname!~"template.*"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow query detected"
+          description: "Query running for {{ $value }}s on {{ $labels.datname }}"
+
+      # Нехватка места на диске
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Only {{ $value }}% disk space remaining"
+
+  - name: my-suite-resources
+    rules:
+      # Высокое использование CPU
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%"
+
+      # Высокое использование памяти
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}%"
+
+      # Swap использование
+      - alert: HighSwapUsage
+        expr: node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes > node_memory_SwapTotal_bytes * 0.6
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High swap usage"
+          description: "Swap usage is {{ $value }}%"
+
+  - name: my-suite-backup
+    rules:
+      # Бэкап не выполнялся
+      - alert: BackupNotRunning
+        expr: time() - mybackup_last_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup has not run in 24 hours"
+          description: "Last backup was {{ $value }} seconds ago"
+
+      # Бэкап провалился
+      - alert: BackupFailed
+        expr: mybackup_last_status == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup failed"
+          description: "Last backup attempt failed"
+
+  - name: my-suite-security
+    rules:
+      # Много неудачных попыток входа
+      - alert: HighFailedLogins
+        expr: rate(auth_failed_logins_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failed login rate"
+          description: "{{ $value }} failed logins per second"
+
+      # Подозрительная активность
+      - alert: SuspiciousActivity
+        expr: rate(http_requests_total{path=~"/api/v1/.*"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Suspicious API activity"
+          description: "{{ $value }} API requests per second"

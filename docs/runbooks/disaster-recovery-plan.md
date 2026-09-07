@@ -214,4 +214,34 @@ export TELEGRAM_CHAT_ID="your-chat-id"
 - [Backup Strategy](backup-strategy.md)
 - [High Availability](high-availability.md)
 - [Incident Response](incident-response.md)
+- [Recovery Checklists](recovery-checklists.md)
 - [Deployment Guide](../deployment-guide.md)
+
+## Автоматизация
+
+### Скрипты восстановления
+
+| Скрипт | Описание | Запуск |
+|--------|----------|--------|
+| `scripts/automation/failover.sh` | Автоматический failover сервиса | `./failover.sh myjira` |
+| `scripts/automation/health-check.sh` | Проверка здоровья всех сервисов | `./health-check.sh` |
+| `scripts/monitoring/prometheus-alerts.yml` | Prometheus алерты | Загрузить в Prometheus |
+
+### Prometheus алерты
+
+```bash
+# Загрузка алертов в Prometheus
+cp scripts/monitoring/prometheus-alerts.yml /etc/prometheus/
+sudo systemctl reload prometheus
+```
+
+### Telegram уведомления
+
+```bash
+# Настройка автоматических уведомлений
+export TELEGRAM_BOT_TOKEN="your-token"
+export TELEGRAM_CHAT_ID="your-chat-id"
+
+# Запуск мониторинга
+./scripts/automation/health-check.sh
+```
