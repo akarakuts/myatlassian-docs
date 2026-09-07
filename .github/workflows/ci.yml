@@ -1,0 +1,282 @@
+# my* Suite CI/CD Pipeline
+# Runs on push to main/master branches and on pull requests.
+# Tests, lints, and builds all 27 applications.
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ============================================================
+  # Stage 1: Quick checks (fmt, clippy) — runs in parallel
+  # ============================================================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - myjira
+          - myconf
+          - mybitbucket
+          - mycrowd
+          - mybamboo
+          - myportal
+          - mystatuspage
+          - myopsgenie
+          - myservicedesk
+          - mycompass
+          - mycalendars
+          - mycrm
+          - myrovo
+          - myanalytics
+          - mymarketplace
+          - myalign
+          - mynotifications
+          - mychat
+          - mytrello
+          - mydiscovery
+          - myatlas
+          - myflow
+          - mysearch
+          - myjam
+          - myrunbook
+          - mytimesheets
+          - myforms
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.app }}
+      - name: Check formatting
+        run: cargo fmt --check
+        working-directory: ${{ matrix.app }}
+      - name: Clippy
+        run: cargo clippy --features ssr --all-targets -- -D warnings
+        working-directory: ${{ matrix.app }}
+
+  # ============================================================
+  # Stage 2: Unit tests — runs after lint passes
+  # ============================================================
+  unit-tests:
+    name: Unit Tests
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - myjira
+          - myconf
+          - mybitbucket
+          - mycrowd
+          - mybamboo
+          - myportal
+          - mystatuspage
+          - myopsgenie
+          - myservicedesk
+          - mycompass
+          - mycalendars
+          - mycrm
+          - myrovo
+          - myanalytics
+          - mymarketplace
+          - myalign
+          - mynotifications
+          - mychat
+          - mytrello
+          - mydiscovery
+          - myatlas
+          - myflow
+          - mysearch
+          - myjam
+          - myrunbook
+          - mytimesheets
+          - myforms
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.app }}
+      - name: Run unit tests
+        run: cargo test --lib --features ssr
+        working-directory: ${{ matrix.app }}
+
+  # ============================================================
+  # Stage 3: WASM build check — ensures CSR compiles
+  # ============================================================
+  wasm-check:
+    name: WASM Build Check
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - myjira
+          - myconf
+          - mybitbucket
+          - mycrowd
+          - mybamboo
+          - myportal
+          - mystatuspage
+          - myopsgenie
+          - myservicedesk
+          - mycompass
+          - mycalendars
+          - mycrm
+          - myrovo
+          - myanalytics
+          - mymarketplace
+          - myalign
+          - mynotifications
+          - mychat
+          - mytrello
+          - mydiscovery
+          - myatlas
+          - myflow
+          - mysearch
+          - myjam
+          - myrunbook
+          - mytimesheets
+          - myforms
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.app }}
+      - name: Check WASM build
+        run: cargo check --lib --no-default-features --features csr --target wasm32-unknown-unknown
+        working-directory: ${{ matrix.app }}
+
+  # ============================================================
+  # Stage 4: Integration tests — needs PostgreSQL
+  # ============================================================
+  integration-tests:
+    name: Integration Tests
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: suite
+          POSTGRES_PASSWORD: suite
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U suite"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+    strategy:
+      matrix:
+        app:
+          - mysearch
+          - mycrowd
+          - myportal
+          - myalign
+          - myanalytics
+          - myforms
+          - mynotifications
+          - myflow
+          - myrovo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.app }}
+      - name: Create test database
+        env:
+          PGHOST: localhost
+          PGUSER: suite
+          PGPASSWORD: suite
+        run: |
+          psql -c "CREATE DATABASE ${APP_DB};" || true
+          psql -c "CREATE USER ${APP_DB} WITH PASSWORD '${APP_DB}';" || true
+          psql -c "GRANT ALL PRIVILEGES ON DATABASE ${APP_DB} TO ${APP_DB};" || true
+        env:
+          APP_DB: ${{ matrix.app }}
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgres://${{ matrix.app }}:${{ matrix.app }}@localhost:5432/${{ matrix.app }}
+        run: cargo test --features ssr --test integration_server -- --test-threads=1
+        working-directory: ${{ matrix.app }}
+
+  # ============================================================
+  # Stage 5: Docker build — verifies all images build
+  # ============================================================
+  docker-build:
+    name: Docker Build
+    needs: [unit-tests, wasm-check]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app:
+          - myjira
+          - myconf
+          - mybitbucket
+          - mycrowd
+          - mybamboo
+          - myportal
+          - mystatuspage
+          - myopsgenie
+          - myservicedesk
+          - mycompass
+          - mycalendars
+          - mycrm
+          - myrovo
+          - myanalytics
+          - mymarketplace
+          - myalign
+          - mynotifications
+          - mychat
+          - mytrello
+          - mydiscovery
+          - myatlas
+          - myflow
+          - mysearch
+          - myjam
+          - myrunbook
+          - mytimesheets
+          - myforms
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t my-suite/${{ matrix.app }}:ci .
+        working-directory: ${{ matrix.app }}
+
+  # ============================================================
+  # Stage 6: Deploy to staging (only on main/master push)
+  # ============================================================
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [integration-tests, docker-build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging..."
+          # Add your deployment commands here
+          # Example: docker compose -f deploy/staging/docker-compose.yml up -d
